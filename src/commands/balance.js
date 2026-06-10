@@ -11,7 +11,7 @@ const KC = "<:KillerCoin1:1514372933144019154>";
 module.exports = {
 
     data: new SlashCommandBuilder()
-        .setName("balance")
+        .setName("saldo")
         .setDescription("Ver saldo de Killer Coins"),
 
     async execute(interaction) {

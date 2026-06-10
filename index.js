@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
+const express = require("express");
 
 const {
     Client,
@@ -9,56 +10,174 @@ const {
     GatewayIntentBits
 } = require("discord.js");
 
+const app = express();
+
 const client = new Client({
     intents: [GatewayIntentBits.Guilds]
 });
 
 client.commands = new Collection();
 
-const commandsPath = path.join(__dirname, "src", "commands");
+// =======================
+// CARREGAR COMANDOS
+// =======================
+
+const commandsPath = path.join(
+    __dirname,
+    "src",
+    "commands"
+);
+
 const commandFiles = fs.readdirSync(commandsPath);
 
 for (const file of commandFiles) {
 
     if (!file.endsWith(".js")) continue;
 
-    const command = require(path.join(commandsPath, file));
+    const command = require(
+        path.join(commandsPath, file)
+    );
 
-    client.commands.set(command.data.name, command);
+    client.commands.set(
+        command.data.name,
+        command
+    );
 
-    console.log(`✅ Comando carregado: ${command.data.name}`);
+    console.log(
+        `✅ Comando carregado: ${command.data.name}`
+    );
 }
 
-client.once("ready", () => {
+// =======================
+// BOT ONLINE
+// =======================
 
-    console.log(`🤖 ${client.user.tag} online!`);
+client.once("clientReady", () => {
+
+    console.log(
+        `🤖 ${client.user.tag} online!`
+    );
+
 });
 
-client.on("interactionCreate", async interaction => {
+// =======================
+// COMANDOS
+// =======================
 
-    if (!interaction.isChatInputCommand()) return;
+client.on(
+    "interactionCreate",
+    async interaction => {
 
-    const command =
-        client.commands.get(interaction.commandName);
-
-    if (!command) return;
-
-    try {
-
-        await command.execute(interaction);
-
-    } catch (error) {
-
-        console.error(error);
-
-        if (interaction.replied || interaction.deferred)
+        if (!interaction.isChatInputCommand())
             return;
 
-        interaction.reply({
-            content: "❌ Ocorreu um erro.",
-            ephemeral: true
-        });
+        const command =
+            client.commands.get(
+                interaction.commandName
+            );
+
+        if (!command) return;
+
+        try {
+
+            await command.execute(
+                interaction
+            );
+
+        } catch (error) {
+
+            console.error(error);
+
+            if (
+                interaction.replied ||
+                interaction.deferred
+            ) return;
+
+            await interaction.reply({
+                content:
+                    "❌ Ocorreu um erro.",
+                ephemeral: true
+            });
+        }
     }
+);
+
+// =======================
+// EXPRESS
+// =======================
+
+app.get("/", (req, res) => {
+
+    res.send(`
+        <html>
+            <head>
+                <title>Hospício do Killer</title>
+            </head>
+
+            <body style="
+                background:#111;
+                color:white;
+                text-align:center;
+                font-family:Arial;
+                padding-top:50px;
+            ">
+                <h1>🤖 Hospício do Killer</h1>
+
+                <h2>
+                    ${
+                        client.user
+                            ? `${client.user.tag} online!`
+                            : "Iniciando..."
+                    }
+                </h2>
+
+                <p>
+                    Bot funcionando normalmente.
+                </p>
+            </body>
+        </html>
+    `);
 });
 
+const PORT =
+    process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+
+    console.log(
+        `🌐 Servidor web iniciado na porta ${PORT}`
+    );
+
+});
+
+// =======================
+// LOGIN
+// =======================
+
 client.login(process.env.TOKEN);
+
+// =======================
+// ANTI-CRASH
+// =======================
+
+process.on(
+    "unhandledRejection",
+    error => {
+
+        console.error(
+            "❌ Unhandled Rejection:",
+            error
+        );
+    }
+);
+
+process.on(
+    "uncaughtException",
+    error => {
+
+        console.error(
+            "❌ Uncaught Exception:",
+            error
+        );
+    }
+);

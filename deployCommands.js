@@ -8,50 +8,105 @@ const {
     Routes
 } = require("discord.js");
 
+// ==========================
+// CONFIG
+// ==========================
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+
+// ==========================
+// CAMINHO DOS COMANDOS
+// ==========================
+const commandsPath = path.join(__dirname, "src", "commands");
+
+if (!fs.existsSync(commandsPath)) {
+    console.error("❌ Pasta 'src/commands' não encontrada!");
+    process.exit(1);
+}
+
+// ==========================
+// CARREGAR COMANDOS
+// ==========================
+const commandFiles = fs
+    .readdirSync(commandsPath)
+    .filter(file => file.endsWith(".js"));
+
 const commands = [];
 
-const commandsPath =
-    path.join(__dirname, "src", "commands");
-
-const commandFiles =
-    fs.readdirSync(commandsPath);
+console.log("🔄 Carregando comandos...");
 
 for (const file of commandFiles) {
 
-    if (!file.endsWith(".js")) continue;
+    const filePath = path.join(commandsPath, file);
 
-    const command =
-        require(path.join(commandsPath, file));
+    let command;
 
-    commands.push(command.data.toJSON());
+    try {
+        command = require(filePath);
+    } catch (err) {
+        console.log(`❌ Erro ao carregar arquivo: ${file}`);
+        console.error(err);
+        continue;
+    }
 
-    console.log(`✅ ${command.data.name}`);
+    // ==========================
+    // VALIDAÇÕES IMPORTANTES
+    // ==========================
+    if (!command?.data) {
+        console.log(`❌ SEM DATA: ${file}`);
+        continue;
+    }
+
+    if (!command.data.name) {
+        console.log(`❌ SEM NAME: ${file}`);
+        continue;
+    }
+
+    if (!command.data.description) {
+        console.log(`❌ SEM DESCRIPTION: ${file}`);
+        continue;
+    }
+
+    if (typeof command.data.name !== "string") {
+        console.log(`❌ NAME INVÁLIDO: ${file}`);
+        continue;
+    }
+
+    if (typeof command.data.description !== "string") {
+        console.log(`❌ DESCRIPTION INVÁLIDA: ${file}`);
+        continue;
+    }
+
+    try {
+        commands.push(command.data.toJSON());
+        console.log(`✅ Carregado: ${command.data.name}`);
+    } catch (err) {
+        console.log(`💥 ERRO AO CONVERTER: ${file}`);
+        console.error(err);
+    }
 }
 
-const rest = new REST({
-    version: "10"
-}).setToken(process.env.TOKEN);
+// ==========================
+// REGISTRAR NA API DO DISCORD
+// ==========================
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
 
     try {
 
-        console.log("🔄 Registrando comandos...");
+        console.log("🔄 Registrando comandos no Discord...");
 
         await rest.put(
-
-            Routes.applicationGuildCommands(
-                process.env.CLIENT_ID,
-                process.env.GUILD_ID
-            ),
-
+            Routes.applicationCommands(CLIENT_ID),
             { body: commands }
         );
 
-        console.log("✅ Comandos registrados!");
+        console.log(`✅ ${commands.length} comandos registrados com sucesso!`);
 
     } catch (error) {
 
+        console.error("❌ Erro ao registrar comandos:");
         console.error(error);
     }
 })();

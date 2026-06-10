@@ -13,10 +13,16 @@ data: new SlashCommandBuilder()
     .setName("pagar")
     .setDescription("Pagar outro usuário")
     .addUserOption(opt =>
-        opt.setName("usuario").setRequired(true)
+        opt
+            .setName("usuario")
+            .setDescription("Usuário que vai receber o pagamento")
+            .setRequired(true)
     )
     .addIntegerOption(opt =>
-        opt.setName("quantia").setRequired(true)
+        opt
+            .setName("quantia")
+            .setDescription("Quantidade de Killer Coins")
+            .setRequired(true)
     ),
 
 async execute(interaction) {
@@ -25,16 +31,37 @@ async execute(interaction) {
     const target = interaction.options.getUser("usuario");
     const amount = interaction.options.getInteger("quantia");
 
-    if (amount <= 0)
-        return interaction.reply({ content: "Valor inválido", ephemeral: true });
+    if (amount <= 0) {
+        return interaction.reply({
+            content: "❌ Valor inválido",
+            ephemeral: true
+        });
+    }
 
-    const user = db.prepare(`SELECT * FROM users WHERE user_id = ?`).get(userId);
+    const user = db.prepare(`
+        SELECT * FROM users WHERE user_id = ?
+    `).get(userId);
 
-    if (!user || user.wallet < amount)
-        return interaction.reply({ content: "Saldo insuficiente", ephemeral: true });
+    if (!user || user.wallet < amount) {
+        return interaction.reply({
+            content: "❌ Saldo insuficiente",
+            ephemeral: true
+        });
+    }
 
-    db.prepare(`UPDATE users SET wallet = wallet - ? WHERE user_id = ?`).run(amount, userId);
-    db.prepare(`UPDATE users SET wallet = wallet + ? WHERE user_id = ?`).run(amount, target.id);
+    // tira do remetente
+    db.prepare(`
+        UPDATE users
+        SET wallet = wallet - ?
+        WHERE user_id = ?
+    `).run(amount, userId);
+
+    // adiciona no destinatário
+    db.prepare(`
+        UPDATE users
+        SET wallet = wallet + ?
+        WHERE user_id = ?
+    `).run(amount, target.id);
 
     return interaction.reply({
         embeds: [

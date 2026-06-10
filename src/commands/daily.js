@@ -5,7 +5,7 @@ const {
 
 const db = require("../database/database");
 
-const KC = "<:KillerCoin1:SEU_ID_AQUI>";
+const KC = "<:KillerCoin1:1514372933144019154>";
 
 module.exports = {
 

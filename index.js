@@ -13,7 +13,9 @@ const {
 const app = express();
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [
+        GatewayIntentBits.Guilds
+    ]
 });
 
 client.commands = new Collection();
@@ -28,15 +30,29 @@ const commandsPath = path.join(
     "commands"
 );
 
-const commandFiles = fs.readdirSync(commandsPath);
+const commandFiles =
+    fs.readdirSync(commandsPath);
 
 for (const file of commandFiles) {
 
-    if (!file.endsWith(".js")) continue;
+    if (!file.endsWith(".js"))
+        continue;
 
     const command = require(
         path.join(commandsPath, file)
     );
+
+    if (
+        !command.data ||
+        !command.execute
+    ) {
+
+        console.log(
+            `⚠️ Comando inválido ignorado: ${file}`
+        );
+
+        continue;
+    }
 
     client.commands.set(
         command.data.name,
@@ -61,15 +77,22 @@ client.once("clientReady", () => {
 });
 
 // =======================
-// COMANDOS
+// INTERAÇÕES
 // =======================
 
 client.on(
     "interactionCreate",
     async interaction => {
 
-        if (!interaction.isChatInputCommand())
+        // Botões serão tratados
+        // pelos próprios comandos
+        if (interaction.isButton()) {
             return;
+        }
+
+        if (
+            !interaction.isChatInputCommand()
+        ) return;
 
         const command =
             client.commands.get(
@@ -86,7 +109,10 @@ client.on(
 
         } catch (error) {
 
-            console.error(error);
+            console.error(
+                `❌ Erro no comando ${interaction.commandName}:`,
+                error
+            );
 
             if (
                 interaction.replied ||
@@ -95,7 +121,7 @@ client.on(
 
             await interaction.reply({
                 content:
-                    "❌ Ocorreu um erro.",
+                    "❌ Ocorreu um erro ao executar este comando.",
                 ephemeral: true
             });
         }
@@ -137,6 +163,7 @@ app.get("/", (req, res) => {
             </body>
         </html>
     `);
+
 });
 
 const PORT =
@@ -154,7 +181,9 @@ app.listen(PORT, () => {
 // LOGIN
 // =======================
 
-client.login(process.env.TOKEN);
+client.login(
+    process.env.TOKEN
+);
 
 // =======================
 // ANTI-CRASH

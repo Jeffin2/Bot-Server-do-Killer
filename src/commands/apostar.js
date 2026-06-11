@@ -1,4 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const {
+    SlashCommandBuilder,
+    EmbedBuilder
+} = require("discord.js");
 
 const db = require("../database/database");
 
@@ -9,30 +12,68 @@ module.exports = {
 data: new SlashCommandBuilder()
     .setName("apostar")
     .setDescription("Cara ou coroa")
+    .addStringOption(opt =>
+        opt
+            .setName("escolha")
+            .setDescription("cara ou coroa")
+            .setRequired(true)
+            .addChoices(
+                { name: "cara", value: "cara" },
+                { name: "coroa", value: "coroa" }
+            )
+    )
     .addIntegerOption(opt =>
         opt
             .setName("quantia")
-            .setDescription("Quantidade para apostar")
+            .setDescription("Quantidade apostada")
             .setRequired(true)
     ),
 
 async execute(interaction) {
 
     const userId = interaction.user.id;
+
+    const escolha = interaction.options.getString("escolha");
     const amount = interaction.options.getInteger("quantia");
 
-    const user = db.prepare(`
-        SELECT * FROM users WHERE user_id = ?
+    if (amount <= 0)
+        return interaction.reply({
+            content: "Valor inválido",
+            ephemeral: true
+        });
+
+    let user = db.prepare(`
+        SELECT *
+        FROM users
+        WHERE user_id = ?
     `).get(userId);
+
+    if (!user) {
+
+        db.prepare(`
+            INSERT INTO users
+            (user_id, wallet, bank, xp, level)
+            VALUES (?, 0, 0, 0, 1)
+        `).run(userId);
+
+        user = db.prepare(`
+            SELECT *
+            FROM users
+            WHERE user_id = ?
+        `).get(userId);
+    }
 
     if (!user || user.wallet < amount) {
         return interaction.reply({
-            content: "❌ Saldo insuficiente",
+            content: "Saldo insuficiente",
             ephemeral: true
         });
     }
 
-    const win = Math.random() < 0.5;
+    const resultado =
+        Math.random() < 0.5 ? "cara" : "coroa";
+
+    let win = escolha === resultado;
 
     if (win) {
 
@@ -46,7 +87,10 @@ async execute(interaction) {
             embeds: [
                 new EmbedBuilder()
                     .setColor("Green")
-                    .setDescription(`🎉 Você ganhou **${amount} ${KC}**!`)
+                    .setDescription(
+                        `🪙 Deu **${resultado}**!\n` +
+                        `🎉 Você ganhou ${amount} ${KC}`
+                    )
             ]
         });
 
@@ -62,7 +106,10 @@ async execute(interaction) {
             embeds: [
                 new EmbedBuilder()
                     .setColor("Red")
-                    .setDescription(`💀 Você perdeu **${amount} ${KC}**`)
+                    .setDescription(
+                        `🪙 Deu **${resultado}**!\n` +
+                        `💀 Você perdeu ${amount} ${KC}`
+                    )
             ]
         });
     }

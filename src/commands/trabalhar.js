@@ -9,47 +9,79 @@ const KC = "<:KillerCoin1:1514372933144019154>";
 
 module.exports = {
 
-    data: new SlashCommandBuilder()
-        .setName("trabalhar")
-        .setDescription("Trabalhe e ganhe Killer Coins"),
+data: new SlashCommandBuilder()
+    .setName("trabalhar")
+    .setDescription("Trabalhe e ganhe Killer Coins"),
 
-    async execute(interaction) {
+async execute(interaction) {
 
-        const userId = interaction.user.id;
+    const userId = interaction.user.id;
 
-        let user = db.prepare(`
+    // garante usuário
+    let user = db.prepare(`
+        SELECT * FROM users WHERE user_id = ?
+    `).get(userId);
+
+    if (!user) {
+        db.prepare(`
+            INSERT INTO users (user_id, wallet, bank, xp, level)
+            VALUES (?, 0, 0, 0, 1)
+        `).run(userId);
+
+        user = db.prepare(`
             SELECT * FROM users WHERE user_id = ?
         `).get(userId);
+    }
 
-        // ✅ CORREÇÃO IMPORTANTE AQUI
-        if (!user) {
+    // tabela de cooldown
+    db.prepare(`
+        CREATE TABLE IF NOT EXISTS work_cooldown (
+            user_id TEXT PRIMARY KEY,
+            last_claim INTEGER
+        )
+    `).run();
 
-            db.prepare(`
-                INSERT INTO users (user_id, wallet, bank, xp, level)
-                VALUES (?, 0, 0, 0, 1)
-            `).run(userId);
+    const data = db.prepare(`
+        SELECT * FROM work_cooldown WHERE user_id = ?
+    `).get(userId);
 
-            user = db.prepare(`
-                SELECT * FROM users WHERE user_id = ?
-            `).get(userId);
-        }
+    const now = Date.now();
+    const cooldown = 10 * 60 * 1000; // 10 minutos
 
-        const reward = Math.floor(Math.random() * 150) + 50;
+    if (data && now - data.last_claim < cooldown) {
 
-        db.prepare(`
-            UPDATE users
-            SET wallet = wallet + ?
-            WHERE user_id = ?
-        `).run(reward, userId);
+        const remaining = cooldown - (now - data.last_claim);
 
-        const embed = new EmbedBuilder()
-            .setColor("Green")
-            .setTitle("👷 Trabalho concluído!")
-            .setDescription(`Você ganhou **${reward} ${KC}**`)
-            .setTimestamp();
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
 
         return interaction.reply({
-            embeds: [embed]
+            content: `⏳ Você já trabalhou! Volte em **${minutes}m ${seconds}s**.`,
+            ephemeral: true
         });
     }
+
+    // recompensa
+    const reward = Math.floor(Math.random() * 150) + 50;
+
+    db.prepare(`
+        UPDATE users
+        SET wallet = wallet + ?
+        WHERE user_id = ?
+    `).run(reward, userId);
+
+    db.prepare(`
+        INSERT OR REPLACE INTO work_cooldown
+        (user_id, last_claim)
+        VALUES (?, ?)
+    `).run(userId, now);
+
+    const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("👷 Trabalho concluído!")
+        .setDescription(`Você ganhou **${reward} ${KC}**`)
+        .setTimestamp();
+
+    return interaction.reply({ embeds: [embed] });
+}
 };

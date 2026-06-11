@@ -11,8 +11,24 @@ CREATE TABLE IF NOT EXISTS users (
     wallet INTEGER DEFAULT 0,
     bank INTEGER DEFAULT 0,
     xp INTEGER DEFAULT 0,
-    level INTEGER DEFAULT 1
+    level INTEGER DEFAULT 1,
+    wins INTEGER DEFAULT 0,
+    losses INTEGER DEFAULT 0
 )
 `);
+
+try {
+    db.prepare(`
+        ALTER TABLE users
+        ADD COLUMN wins INTEGER DEFAULT 0
+    `).run();
+} catch {}
+
+try {
+    db.prepare(`
+        ALTER TABLE users
+        ADD COLUMN losses INTEGER DEFAULT 0
+    `).run();
+} catch {}
 
 module.exports = db;

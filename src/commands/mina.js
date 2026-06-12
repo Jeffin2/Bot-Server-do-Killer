@@ -38,11 +38,7 @@ function createButtons(revealed, bombs, ended) {
 
         if (revealed.includes(i)) {
 
-            if (bombs.has(i)) {
-                label = "💣";
-            } else {
-                label = "💎";
-            }
+            label = bombs.has(i) ? "💣" : "💎";
         }
 
         rows[rowIndex].addComponents(
@@ -58,15 +54,13 @@ function createButtons(revealed, bombs, ended) {
         );
     }
 
-    // 💰 BOTÃO DE SACAR
-    rows.push(
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId("mina_stop")
-                .setLabel("💰 Sacar")
-                .setStyle(ButtonStyle.Success)
-                .setDisabled(ended)
-        )
+    // 💰 botão de sacar dentro da última linha
+    rows[rows.length - 1].addComponents(
+        new ButtonBuilder()
+            .setCustomId("mina_stop")
+            .setLabel("💰 Sacar")
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(ended)
     );
 
     return rows;
@@ -74,192 +68,192 @@ function createButtons(revealed, bombs, ended) {
 
 module.exports = {
 
-data: new SlashCommandBuilder()
-    .setName("mina")
-    .setDescription("Jogue Mines")
-    .addIntegerOption(opt =>
-        opt
-            .setName("aposta")
-            .setDescription("Quantidade de Killer Coins")
-            .setRequired(true)
-    ),
+    data: new SlashCommandBuilder()
+        .setName("mina")
+        .setDescription("Jogue Mines")
+        .addIntegerOption(opt =>
+            opt
+                .setName("aposta")
+                .setDescription("Quantidade de Killer Coins")
+                .setRequired(true)
+        ),
 
-async execute(interaction) {
+    async execute(interaction) {
 
-    const userId = interaction.user.id;
-    const bet = interaction.options.getInteger("aposta");
+        const userId = interaction.user.id;
+        const bet = interaction.options.getInteger("aposta");
 
-    if (bet <= 0) {
-        return interaction.reply({
-            content: "❌ aposta invalida",
-            ephemeral: true
-        });
-    }
+        if (bet <= 0) {
+            return interaction.reply({
+                content: "❌ aposta invalida",
+                ephemeral: true
+            });
+        }
 
-    let user = db.prepare(`
+        let user = db.prepare(`
         SELECT *
         FROM users
         WHERE user_id = ?
     `).get(userId);
 
-    if (!user) {
+        if (!user) {
 
-        db.prepare(`
+            db.prepare(`
             INSERT INTO users
             (user_id, wallet, bank, xp, level)
             VALUES (?, 0, 0, 0, 1)
         `).run(userId);
 
-        user = db.prepare(`
+            user = db.prepare(`
             SELECT *
             FROM users
             WHERE user_id = ?
         `).get(userId);
-    }
+        }
 
-    if (user.wallet < bet) {
-        return interaction.reply({
-            content: "❌ saldo insuficiente",
-            ephemeral: true
-        });
-    }
+        if (user.wallet < bet) {
+            return interaction.reply({
+                content: "❌ saldo insuficiente",
+                ephemeral: true
+            });
+        }
 
-    // desconta aposta antes (anti-bug)
-    db.prepare(`
+        // desconta aposta antes (anti-bug)
+        db.prepare(`
         UPDATE users
         SET wallet = wallet - ?
         WHERE user_id = ?
     `).run(bet, userId);
 
-    const bombs = generateBoard(5);
+        const bombs = generateBoard(5);
 
-    let revealed = [];
-    let multiplier = 1.0;
-    let ended = false;
+        let revealed = [];
+        let multiplier = 1.0;
+        let ended = false;
 
-    const embed = new EmbedBuilder()
-        .setColor("Blue")
-        .setTitle("💣 Mina")
-        .setDescription(
-            `💰 Aposta: ${bet} ${KC}\n` +
-            `💎 Multiplicador: x${multiplier.toFixed(2)}`
-        );
+        const embed = new EmbedBuilder()
+            .setColor("Blue")
+            .setTitle("💣 Mina")
+            .setDescription(
+                `💰 Aposta: ${bet} ${KC}\n` +
+                `💎 Multiplicador: x${multiplier.toFixed(2)}`
+            );
 
-    const msg = await interaction.reply({
-        embeds: [embed],
-        components: createButtons(revealed, bombs, ended),
-        fetchReply: true
-    });
+        const msg = await interaction.reply({
+            embeds: [embed],
+            components: createButtons(revealed, bombs, ended),
+            fetchReply: true
+        });
 
-    const collector = msg.createMessageComponentCollector({
-        time: 120000
-    });
+        const collector = msg.createMessageComponentCollector({
+            time: 120000
+        });
 
-    collector.on("collect", async button => {
+        collector.on("collect", async button => {
 
-        if (button.user.id !== userId) {
-            return button.reply({
-                content: "❌ nao e sua partida",
-                ephemeral: true
-            });
-        }
+            if (button.user.id !== userId) {
+                return button.reply({
+                    content: "❌ nao e sua partida",
+                    ephemeral: true
+                });
+            }
 
-        // 💰 BOTÃO SACAR
-        if (button.customId === "mina_stop") {
+            // 💰 BOTÃO SACAR
+            if (button.customId === "mina_stop") {
 
-            ended = true;
+                ended = true;
 
-            const winValue = Math.floor(bet * multiplier);
+                const winValue = Math.floor(bet * multiplier);
 
-            db.prepare(`
+                db.prepare(`
                 UPDATE users
                 SET wallet = wallet + ?
                 WHERE user_id = ?
             `).run(winValue, userId);
 
-            collector.stop();
+                collector.stop();
+
+                return button.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor("Gold")
+                            .setTitle("💰 Saque realizado")
+                            .setDescription(
+                                `Você sacou **${winValue} ${KC}**`
+                            )
+                    ],
+                    components: createButtons(revealed, bombs, true)
+                });
+            }
+
+            const index = parseInt(button.customId.split("_")[1]);
+
+            if (ended || revealed.includes(index)) return;
+
+            revealed.push(index);
+
+            if (bombs.has(index)) {
+
+                ended = true;
+                collector.stop();
+
+                return button.update({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor("Red")
+                            .setTitle("💥 Você explodiu!")
+                            .setDescription(
+                                `Perdeu ${bet} ${KC}`
+                            )
+                    ],
+                    components: createButtons(revealed, bombs, true)
+                });
+            }
+
+            multiplier += 0.25;
+
+            const winValue = Math.floor(bet * multiplier);
 
             return button.update({
                 embeds: [
                     new EmbedBuilder()
-                        .setColor("Gold")
-                        .setTitle("💰 Saque realizado")
+                        .setColor("Green")
+                        .setTitle("💣 Mina")
                         .setDescription(
-                            `Você sacou **${winValue} ${KC}**`
+                            `💰 Aposta: ${bet} ${KC}\n` +
+                            `💎 Multiplicador: x${multiplier.toFixed(2)}\n` +
+                            `💸 Saque atual: ${winValue} ${KC}`
                         )
                 ],
-                components: createButtons(revealed, bombs, true)
+                components: createButtons(revealed, bombs, false)
             });
-        }
-
-        const index = parseInt(button.customId.split("_")[1]);
-
-        if (ended || revealed.includes(index)) return;
-
-        revealed.push(index);
-
-        if (bombs.has(index)) {
-
-            ended = true;
-            collector.stop();
-
-            return button.update({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor("Red")
-                        .setTitle("💥 Você explodiu!")
-                        .setDescription(
-                            `Perdeu ${bet} ${KC}`
-                        )
-                ],
-                components: createButtons(revealed, bombs, true)
-            });
-        }
-
-        multiplier += 0.25;
-
-        const winValue = Math.floor(bet * multiplier);
-
-        return button.update({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor("Green")
-                    .setTitle("💣 Mina")
-                    .setDescription(
-                        `💰 Aposta: ${bet} ${KC}\n` +
-                        `💎 Multiplicador: x${multiplier.toFixed(2)}\n` +
-                        `💸 Saque atual: ${winValue} ${KC}`
-                    )
-            ],
-            components: createButtons(revealed, bombs, false)
         });
-    });
 
-    collector.on("end", async () => {
+        collector.on("end", async () => {
 
-        if (ended) return;
+            if (ended) return;
 
-        const winValue = Math.floor(bet * multiplier);
+            const winValue = Math.floor(bet * multiplier);
 
-        db.prepare(`
+            db.prepare(`
             UPDATE users
             SET wallet = wallet + ?
             WHERE user_id = ?
         `).run(winValue, userId);
 
-        try {
-            await msg.edit({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor("Grey")
-                        .setTitle("🏁 Mina finalizada")
-                        .setDescription(
-                            `💰 Você sacou ${winValue} ${KC}`
-                        )
-                ],
-                components: []
-            });
-        } catch {}
-    });
-}
+            try {
+                await msg.edit({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor("Grey")
+                            .setTitle("🏁 Mina finalizada")
+                            .setDescription(
+                                `💰 Você sacou ${winValue} ${KC}`
+                            )
+                    ],
+                    components: []
+                });
+            } catch { }
+        });
+    }
 };

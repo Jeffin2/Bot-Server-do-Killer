@@ -58,6 +58,17 @@ function createButtons(revealed, bombs, ended) {
         );
     }
 
+    // 💰 BOTÃO DE SACAR
+    rows.push(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("mina_stop")
+                .setLabel("💰 Sacar")
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(ended)
+        )
+    );
+
     return rows;
 }
 
@@ -78,11 +89,12 @@ async execute(interaction) {
     const userId = interaction.user.id;
     const bet = interaction.options.getInteger("aposta");
 
-    if (bet <= 0)
+    if (bet <= 0) {
         return interaction.reply({
             content: "❌ aposta invalida",
             ephemeral: true
         });
+    }
 
     let user = db.prepare(`
         SELECT *
@@ -106,14 +118,13 @@ async execute(interaction) {
     }
 
     if (user.wallet < bet) {
-
         return interaction.reply({
             content: "❌ saldo insuficiente",
             ephemeral: true
         });
     }
 
-    // desconta aposta ANTES (como você pediu)
+    // desconta aposta antes (anti-bug)
     db.prepare(`
         UPDATE users
         SET wallet = wallet - ?
@@ -153,6 +164,34 @@ async execute(interaction) {
             });
         }
 
+        // 💰 BOTÃO SACAR
+        if (button.customId === "mina_stop") {
+
+            ended = true;
+
+            const winValue = Math.floor(bet * multiplier);
+
+            db.prepare(`
+                UPDATE users
+                SET wallet = wallet + ?
+                WHERE user_id = ?
+            `).run(winValue, userId);
+
+            collector.stop();
+
+            return button.update({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor("Gold")
+                        .setTitle("💰 Saque realizado")
+                        .setDescription(
+                            `Você sacou **${winValue} ${KC}**`
+                        )
+                ],
+                components: createButtons(revealed, bombs, true)
+            });
+        }
+
         const index = parseInt(button.customId.split("_")[1]);
 
         if (ended || revealed.includes(index)) return;
@@ -162,6 +201,7 @@ async execute(interaction) {
         if (bombs.has(index)) {
 
             ended = true;
+            collector.stop();
 
             return button.update({
                 embeds: [
@@ -199,7 +239,6 @@ async execute(interaction) {
 
         if (ended) return;
 
-        // se sair antes de bomba, pode sacar
         const winValue = Math.floor(bet * multiplier);
 
         db.prepare(`
@@ -209,11 +248,10 @@ async execute(interaction) {
         `).run(winValue, userId);
 
         try {
-
             await msg.edit({
                 embeds: [
                     new EmbedBuilder()
-                        .setColor("Gold")
+                        .setColor("Grey")
                         .setTitle("🏁 Mina finalizada")
                         .setDescription(
                             `💰 Você sacou ${winValue} ${KC}`
@@ -221,7 +259,6 @@ async execute(interaction) {
                 ],
                 components: []
             });
-
         } catch {}
     });
 }
